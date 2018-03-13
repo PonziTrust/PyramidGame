@@ -7,6 +7,7 @@ The Pyramid Game contract implement [ERC667 Recipient](https://github.com/ethere
 
 ## Details
 - Address: [0x39a0Ff5b4Bc9d06F2267560C64f9bd490Cf7221D](https://etherscan.io/address/0x39a0Ff5b4Bc9d06F2267560C64f9bd490Cf7221D)
+
 More details on [ponzitrust.com](https://ponzitrust.com/).
 
 ### Full JSON ABI:
