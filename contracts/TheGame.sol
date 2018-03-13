@@ -17,6 +17,7 @@ contract PonziTokenMinInterface {
   function transferFrom(address from, address to, uint256 value) public returns (bool);
 }
 
+
 /**
 * @dev TheGame contract implement ERC667 Recipient 
 * see: https://github.com/ethereum/EIPs/issues/677) 

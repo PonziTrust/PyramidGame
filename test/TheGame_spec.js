@@ -21,9 +21,8 @@ let PonziToken = truffleContract(data);
 PonziToken.setProvider(web3.currentProvider);
 PonziToken.defaults({
   gas: 4712388,
-  gasPrice: gasPrice
+  gasPrice: gasPrice,
 });
-
 
 // this contract is must have, because solidity-coverage has a bag and
 // no way to receive eth like this method
@@ -60,7 +59,7 @@ let calcCompoundingInterest = function (input, numerator, numberOfPayout) {
   return output;
 };
 
-let goToLevel = async (theGame, token, level, player, amount) => {
+let goToLevel = async function (theGame, token, level, player, amount) {
   // game min interest rate - 0.1%
   // 1 players with  input, ponzi balance of game = input
   // input =< input *(1.001)^n -10%
@@ -75,6 +74,10 @@ let goToLevel = async (theGame, token, level, player, amount) => {
     await theGame.exit({ from: player });
     level--;
   }
+};
+
+let compareWithThreshold = function (a, b, threshold) {
+  return (Math.abs(a) - Math.abs(b)) <= threshold;
 };
 
 contract('TheGame', () => {
@@ -127,7 +130,6 @@ contract('TheGame', () => {
       await assertRevert(theGame.level());
     });
   });
-
 
   describe('setState(string)', () => {
     beforeEach(async () => {
@@ -702,12 +704,10 @@ contract('TheGame', () => {
     context('playerDelayOnExit(address)', () => {
       let amount = 10000;
       let referralAddr = web3.toHex(0);
-      let playerEtranceTimestamp;
       beforeEach(async () => {
         await token.setState(StateToken.PublicUse.str, { from: tokenOwner });
         await token.transfer(player1, amount, { from: tokenOwner });
         await token.transferAndCall(theGame.address, amount, referralAddr, { from: player1 });
-        playerEtranceTimestamp = latestTime();
       });
 
       it('delay is zero if not player', async () => {
@@ -717,25 +717,19 @@ contract('TheGame', () => {
       });
 
       it('delay on after 1h', async () => {
-        await increaseTime(duration.hours(1));
+        let delay = duration.hours(1);
+        await increaseTime(delay);
         await theGame.setState(StateGame.Active.str, { from: gameOwner });
-        let now = latestTime();
         let playerDelay = await theGame.playerDelayOnExit(player1, { from: player1 });
-        assert.equal(
-          playerDelay.toString(),
-          BigNumber(DELAY_ON_EXIT).minus(BigNumber(now).minus(playerEtranceTimestamp)).toString()
-        );
+        assert(compareWithThreshold(DELAY_ON_EXIT - delay, playerDelay.toNumber(), 2));
       });
 
       it('delay on after 99h', async () => {
+        let delay = duration.hours(99);
         await increaseTime(duration.hours(99));
         await theGame.setState(StateGame.Active.str, { from: gameOwner });
-        let now = latestTime();
         let playerDelay = await theGame.playerDelayOnExit(player1, { from: player1 });
-        assert.equal(
-          playerDelay.toString(),
-          BigNumber(DELAY_ON_EXIT).minus(BigNumber(now).minus(playerEtranceTimestamp)).toString()
-        );
+        assert(compareWithThreshold(DELAY_ON_EXIT - delay, playerDelay.toNumber(), 2));
       });
 
       it('delay on after 100h', async () => {
@@ -956,10 +950,7 @@ contract('TheGame', () => {
 
       it('currentDelayOnNewLevel == ' + duration.days(7), async () => {
         let currentDelayOnNewLevel = await theGame.currentDelayOnNewLevel({ from: player1 });
-        assert(
-          (DELAY_ON_NEW_LEVEL - 2 <= currentDelayOnNewLevel.toNumber()) &&
-          (currentDelayOnNewLevel.toNumber() <= DELAY_ON_NEW_LEVEL)
-        );
+        assert(compareWithThreshold(DELAY_ON_NEW_LEVEL, currentDelayOnNewLevel.toNumber(), 2));
       });
     });
 
@@ -978,10 +969,7 @@ contract('TheGame', () => {
 
       it('currentDelayOnNewLevel()', async () => {
         let currentDelayOnNewLevel = await theGame.currentDelayOnNewLevel();
-        assert(
-          (DELAY_ON_NEW_LEVEL - 2 <= currentDelayOnNewLevel.toNumber()) &&
-          (currentDelayOnNewLevel.toNumber() <= DELAY_ON_NEW_LEVEL)
-        );
+        assert(compareWithThreshold(DELAY_ON_NEW_LEVEL, currentDelayOnNewLevel.toNumber(), 2));
       });
 
       it('throw if DELAY_ON_NEW_LEVEL was not expiried', async () => {
@@ -1128,7 +1116,7 @@ contract('TheGame', () => {
           from: gameOwner,
           to: theGame.address,
           value: value,
-          gas: 70000
+          gas: 70000,
         }),
       );
     });
@@ -1140,10 +1128,10 @@ contract('TheGame', () => {
         from: ponziAddr,
         to: theGame.address,
         value: value,
-        gas: 70000
+        gas: 70000,
       });
       let balanceAfter = await getBalance(theGame.address);
-      assert.equal(balanceBefore.plus(value).toString(), balanceAfter.toString())
+      assert.equal(balanceBefore.plus(value).toString(), balanceAfter.toString());
     });
   });
 });
