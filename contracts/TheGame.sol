@@ -1,5 +1,12 @@
 pragma solidity ^0.4.18;
 
+/*
+* Ponzi Trust Pyramid Game Smart Contracts
+* Code is published on https://github.com/PonziTrust/PyramidGame
+* Ponzi Trust https://ponzitrust.com/
+*/
+
+
 import "./PlayersStorage.sol";
 import "./SafeMath.sol";
 
@@ -33,14 +40,12 @@ contract TheGame is ERC677Recipient {
   }
 
   State private m_state;
-  
   address private m_owner;
   uint256 private m_level;
   PlayersStorage private m_playersStorage;
   PonziTokenMinInterface private m_ponziToken;
   uint256 private m_interestRateNumerator;
   uint256 private constant INTEREST_RATE_DENOMINATOR = 1000;
-  
   uint256 private m_creationTimestamp;
   uint256 private constant DURATION_TO_ACCESS_FOR_OWNER = 144 days;
   uint256 private constant COMPOUNDING_FREQ = 1 days;
@@ -49,6 +54,7 @@ contract TheGame is ERC677Recipient {
   string private constant NOT_ACTIVE_STR = "NotActive";
   uint256 private constant PERCENT_TAX_ON_EXIT = 10;
   string private constant ACTIVE_STR = "Active";
+  uint256 private constant PERCENT_REFERRAL_BOUNTY = 1;
   uint256 private m_levelStartupTimestamp;
   uint256 private m_ponziPriceInWei;
   address private m_priceSetter;
@@ -141,21 +147,21 @@ contract TheGame is ERC677Recipient {
     
     assert(outputInPonzi > 0);
     
-    // conver ponzi to eth
+    // convert ponzi to eth
     uint256 outputInWei = ponziToWei(outputInPonzi, m_ponziPriceInWei);
     
-    // set zero  before sending to prevent Re-Entrancy 
+    // set zero before sending to prevent Re-Entrancy 
     m_playersStorage.deletePlayer(msg.sender);
     
-    if (m_ponziPriceInWei > 0 && this.balance >= outputInWei) {
-      // if we have enough eth on this.balance 
+    if (m_ponziPriceInWei > 0 && address(this).balance >= outputInWei) {
+      // if we have enough eth on address(this).balance 
       // send it to sender
       
       // WARNING
       // untrusted Transfer !!!
-      uint256 oldBalance = this.balance;
+      uint256 oldBalance = address(this).balance;
       msg.sender.transfer(outputInWei);
-      assert(this.balance.add(outputInWei) >= oldBalance);
+      assert(address(this).balance.add(outputInWei) >= oldBalance);
       
     } else if (m_ponziToken.balanceOf(address(this)) >= outputInPonzi) {
       // else if we have enough ponzi on balance
@@ -166,7 +172,7 @@ contract TheGame is ERC677Recipient {
       assert(m_ponziToken.balanceOf(address(this)).add(outputInPonzi) == oldPonziBalance);
     } else {
       // if we dont have nor eth, nor ponzi then transfer all avaliable ponzi to 
-      // msg.sender and go to new Level
+      // msg.sender and go to next Level
       assert(m_ponziToken.transfer(msg.sender, m_ponziToken.balanceOf(address(this))));
       assert(m_ponziToken.balanceOf(address(this)) == 0);
       nextLevel();
@@ -344,7 +350,6 @@ contract TheGame is ERC677Recipient {
   function totalPonziInGame() 
     external 
     view 
-    atState(State.Active)
     returns(uint256) 
   {
     return m_ponziToken.balanceOf(address(this));
@@ -447,44 +452,45 @@ contract TheGame is ERC677Recipient {
   
   /**
   * @dev Try create new player. 
-  * @param newPlayerAddr Adrress of pretender player.
-  * @param input Input of pretender player.
+  * @param addr Adrress of pretender player.
+  * @param inputAmount Input tokens amount of pretender player.
   * @param referralAddr Referral address of pretender player.
   * @return Whether specified player in game or not.
   */
-  function newPlayer(address newPlayerAddr, uint256 input, address referralAddr) //  solium-disable-line security/no-assign-params
+  function newPlayer(address addr, uint256 inputAmount, address referralAddr)
     private
     returns(bool)
   {
+    uint256 input = inputAmount;
     // return false if player already in game or if input < 1000,
     // because calcOutput() use INTEREST_RATE_DENOMINATOR = 1000.
     // and input must div by INTEREST_RATE_DENOMINATOR, if 
     // input <1000 then dividing always equal 0.
-    if (m_playersStorage.playerExist(newPlayerAddr) || input < 1000) 
+    if (m_playersStorage.playerExist(addr) || input < 1000) 
       return false;
     
     // check if referralAddr is player
     if (m_playersStorage.playerExist(referralAddr)) {
-      // transfer 1% input form newPlayerAddr to referralAddr :
-      // newPlayerInput = input * 99%;
-      // referralInput  = (current referral input) + input * 1%
-      uint256 newPlayerInput = input.mul(99).div(100);
+      // transfer 1% input form addr to referralAddr :
+      // newPlayerInput = input * (100-PERCENT_REFERRAL_BOUNTY) %;
+      // referralInput  = (current referral input) + input * PERCENT_REFERRAL_BOUNTY %
+      uint256 newPlayerInput = inputAmount.mul(uint256(100).sub(PERCENT_REFERRAL_BOUNTY)).div(100);
       uint256 referralInput = m_playersStorage.playerInput(referralAddr);
-      referralInput = referralInput.add(input.sub(newPlayerInput));
+      referralInput = referralInput.add(inputAmount.sub(newPlayerInput));
       
       // try set input of referralAddr player
       assert(m_playersStorage.playerSetInput(referralAddr, referralInput));
-      // if success, set input of new player = input * 99% = newPlayerInput
+      // if success, set input of new player = newPlayerInput
       input = newPlayerInput;
     }
     // try create new player
-    assert(m_playersStorage.newPlayer(newPlayerAddr, input, now));
-    NewPlayer(newPlayerAddr, input, now);
+    assert(m_playersStorage.newPlayer(addr, input, now));
+    NewPlayer(addr, input, now);
     return true;
   }
   
   /**
-  * @dev Calc possibly output for specified input and number of payout.
+  * @dev Calc possibly output (compounding interest) for specified input and number of payout.
   * @param input Input amount.
   * @param numberOfPayout Number of payout.
   * @return Possibly output.
@@ -570,21 +576,13 @@ contract TheGame is ERC677Recipient {
 
   /**
   * @dev Conver bytes data to address. 
-  * @param addr Bytes data.
+  * @param source Bytes data.
   * @return Result address of convertation.
   */
-  function bytesToAddress(bytes addr) internal pure returns (address) {
-    if (addr.length != 20 ) 
-      return address(0);
-    uint160 m = 0;
-    uint160 b = 0;
-
-    for (uint8 i = 0; i < 20; i++) {
-      m *= 256;
-      b = uint160(addr[i]);
-      m += (b);
+  function bytesToAddress(bytes source) internal pure returns(address parsedReferer) {
+    assembly {
+      parsedReferer := mload(add(source,0x14))
     }
-
-    return address(m);
+    return parsedReferer;
   }
 }

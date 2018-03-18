@@ -65,12 +65,12 @@ let goToLevel = async function (theGame, token, level, player, amount) {
   // input =< input *(1.001)^n -10%
   // 1 =< (1.001)^n - 10%
   // (1.001)^n >= 1.1
-  // n = 100 is ok
+  // n = 120 is ok
   let referralAddr = web3.toHex(0);
   while (level > 1) {
     await increaseTime(DELAY_ON_NEW_LEVEL);
     await token.transferAndCall(theGame.address, amount, referralAddr, { from: player });
-    await increaseTime(duration.days(100));
+    await increaseTime(duration.days(120));
     await theGame.exit({ from: player });
     level--;
   }
@@ -1034,8 +1034,8 @@ contract('TheGame', () => {
     });
 
     it('level == ' + level, async () => {
-      let level = await theGame.level({ from: player1 });
-      assert.equal(level.toString(), level);
+      let currentLvl = await theGame.level({ from: player1 });
+      assert.equal(currentLvl.toString(), level);
     });
 
     it('interestRate == ' + numerator / INTEREST_RATE_DENOMINATOR * 100 + '% = ' + numerator + ' / 1000', async () => {
@@ -1060,8 +1060,8 @@ contract('TheGame', () => {
     });
 
     it('level == ' + level, async () => {
-      let level = await theGame.level({ from: player1 });
-      assert.equal(level.toString(), level);
+      let currentLvl = await theGame.level({ from: player1 });
+      assert.equal(currentLvl.toString(), level);
     });
 
     it('interestRate == ' + numerator / INTEREST_RATE_DENOMINATOR * 100 + '% = ' + numerator + ' / 1000', async () => {
@@ -1069,10 +1069,27 @@ contract('TheGame', () => {
       assert.equal(interestRate[0].toString(), numerator);
       assert.equal(interestRate[1].toString(), INTEREST_RATE_DENOMINATOR);
     });
+
+    // context('exit() transaction const', () => {
+    //   let amount = 10000;
+    //   let referralAddr = web3.toHex(0);
+    //   let cost;
+    //   before(async () => {
+    //     await increaseTime(DELAY_ON_NEW_LEVEL);
+    //     await token.transfer(player2, 2 * amount, { from: tokenOwner });
+    //     await token.transferAndCall(theGame.address, amount, referralAddr, { from: player1 });
+    //     await token.transferAndCall(theGame.address, 2*amount, referralAddr, { from: player2 });
+    //     await increaseTime(duration.days(1000));
+    //     await token.setState(StateToken.PublicUse.str, { from: tokenOwner });
+    //     await theGame.exit({ from: player1 });
+    //     cost = latestGasUsed();
+    //   });
+    //   it('after 1000 days is ' + cost, () =>{});
+    // });
   });
 
-  describe('Level 17', () => {
-    let level = 17;
+  describe('Level 20', () => {
+    let level = 20;
     let numerator = 1;
     let amount = 10000;
     before(async () => {
@@ -1085,13 +1102,9 @@ contract('TheGame', () => {
       await goToLevel(theGame, token, level, player1, amount);
     });
 
-    // it('go to level ' + level, async () => {
-    //   await goToLevel(theGame, token, level, player1, amount);
-    // });
-
     it('level == ' + level, async () => {
-      let level = await theGame.level({ from: player1 });
-      assert.equal(level.toString(), level);
+      let currentLvl = await theGame.level({ from: player1 });
+      assert.equal(currentLvl.toString(), level);
     });
 
     it('interestRate == ' + numerator / INTEREST_RATE_DENOMINATOR * 100 + '% = ' + numerator + ' / 1000', async () => {
